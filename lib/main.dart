@@ -1,11 +1,15 @@
+import 'package:quiz_app/question_bank.dart';
 import 'package:flutter/material.dart';
+import 'package:rflutter_alert/rflutter_alert.dart';
 
 void main() => runApp(QuizApp());
+QuestionBank questionBank = QuestionBank();
 
 class QuizApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       home: Scaffold(
         backgroundColor: Colors.grey.shade900,
         body: SafeArea(
@@ -25,68 +29,219 @@ class QuizPage extends StatefulWidget {
 }
 
 class _QuizPageState extends State<QuizPage> {
+  List<Icon> score = [];
+  int correct = 0;
+  int incorrect = 0;
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    fetchDataHelper();
+  }
+
+  Future<void> fetchDataHelper() async {
+    setState(() {
+      loading = true;
+    });
+    await questionBank.fetchData().then((value) {
+      setState(() {
+        loading = false;
+      });
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Expanded(
-          flex: 5,
-          child: Padding(
-            padding: EdgeInsets.all(10.0),
-            child: Center(
-              child: Text(
-                'This is where the question text will go.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 25.0,
-                  color: Colors.white,
+    if (!loading) {
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Expanded(
+            flex: 5,
+            child: Padding(
+              padding: EdgeInsets.all(10.0),
+              child: Center(
+                child: Text(
+                  questionBank.getQuestionText(),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 25.0,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-        Expanded(
-          child: Padding(
-            padding: EdgeInsets.all(15.0),
-            child: FlatButton(
-              textColor: Colors.white,
-              color: Colors.green,
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.all(15.0),
+              child: FlatButton(
+                textColor: Colors.white,
+                color: Colors.green,
+                child: Text(
+                  'True',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20.0,
+                  ),
+                ),
+                onPressed: () {
+                  checkAnswer(true);
+                },
+              ),
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.all(15.0),
+              child: FlatButton(
+                color: Colors.red,
+                child: Text(
+                  'False',
+                  style: TextStyle(
+                    fontSize: 20.0,
+                    color: Colors.white,
+                  ),
+                ),
+                onPressed: () {
+                  checkAnswer(false);
+                },
+              ),
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: score,
+          ),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
               child: Text(
-                'True',
+                "Questions powered by opentdb.com",
                 style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20.0,
+                  color: Colors.white12,
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
                 ),
               ),
-              onPressed: () {
-                //The user picked true.
+            ),
+          ),
+        ],
+      );
+    } else {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(
+              backgroundColor: Colors.white,
+              strokeWidth: 5,
+            ),
+            FutureBuilder(
+              future: Future.delayed(const Duration(seconds: 7)),
+              builder: (c, s) {
+                double _visible = 0.0;
+                if (s.connectionState == ConnectionState.done) {
+                  _visible = 1.0;
+                } else {
+                  _visible = 0.0;
+                }
+
+                return AnimatedSwitcher(
+                  duration: Duration(seconds: 1),
+                  child: AnimatedOpacity(
+                    opacity: _visible,
+                    duration: Duration(seconds: 1),
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 20),
+                        child: Text(
+                          "Is this taking too long? Check your internet connection",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontStyle: FontStyle.italic,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
               },
             ),
-          ),
+          ],
         ),
-        Expanded(
-          child: Padding(
-            padding: EdgeInsets.all(15.0),
-            child: FlatButton(
-              color: Colors.red,
-              child: Text(
-                'False',
-                style: TextStyle(
-                  fontSize: 20.0,
-                  color: Colors.white,
-                ),
+      );
+    }
+  }
+
+  void checkAnswer(bool choice) {
+    setState(() {
+      if (choice == questionBank.getQuestionAnswer()) {
+        score.add(Icon(
+          Icons.check,
+          color: Colors.green,
+        ));
+        correct++;
+      } else {
+        score.add(Icon(
+          Icons.close,
+          color: Colors.red,
+        ));
+        incorrect++;
+      }
+
+      if (questionBank.atEnd()) {
+        _resetGame(context);
+      }
+
+      questionBank.nextQuestion();
+    });
+  }
+
+  void _resetGame(BuildContext context) {
+    int total = questionBank.getAmountOfQuestions();
+    double percent = (correct / total) * 100;
+    var a = Alert(
+        context: context,
+        title: "$percent%",
+        desc: "You got $correct out of $total questions right.",
+        buttons: [
+          DialogButton(
+            color: Colors.black,
+            child: Text(
+              "Reset Quiz",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
               ),
-              onPressed: () {
-                //The user picked false.
-              },
             ),
+            onPressed: (() {
+              Navigator.pop(context);
+              setState(() {
+                questionBank.reset();
+                fetchDataHelper();
+                score.clear();
+                correct = 0;
+                incorrect = 0;
+                percent = 0;
+              });
+            }),
+          )
+        ],
+        style: new AlertStyle(
+          backgroundColor: Colors.white,
+          animationType: AnimationType.fromTop,
+          isCloseButton: false,
+          isOverlayTapDismiss: false,
+          alertBorder: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(50),
+            side: BorderSide(color: Colors.grey.shade900),
           ),
-        ),
-        //TODO: Add a Row here as your score keeper
-      ],
-    );
+        ));
+    a.show();
   }
 }
 
